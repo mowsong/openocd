@@ -58,7 +58,7 @@ void *jimcmd_privdata(Jim_Cmd *cmd)
 	return cmd->isproc ? NULL : cmd->u.native.privData;
 }
 
-static void tcl_output(void *privData, const char *file, unsigned line,
+static void tcl_output(void *privData, const char *file, unsigned int line,
 	const char *function, const char *string)
 {
 	struct log_capture_state *state = privData;
@@ -144,7 +144,7 @@ static void script_debug(Jim_Interp *interp, unsigned int argc, Jim_Obj * const 
 		return;
 
 	char *dbg = alloc_printf("command -");
-	for (unsigned i = 0; i < argc; i++) {
+	for (unsigned int i = 0; i < argc; i++) {
 		const char *w = Jim_GetString(argv[i], NULL);
 		char *t = alloc_printf("%s %s", dbg, w);
 		free(dbg);
@@ -288,7 +288,7 @@ int __register_commands(struct command_context *cmd_ctx, const char *cmd_prefix,
 	struct target *override_target)
 {
 	int retval = ERROR_OK;
-	unsigned i;
+	unsigned int i;
 	for (i = 0; cmds[i].name || cmds[i].chain; i++) {
 		const struct command_registration *cr = cmds + i;
 
@@ -323,7 +323,7 @@ int __register_commands(struct command_context *cmd_ctx, const char *cmd_prefix,
 		}
 	}
 	if (retval != ERROR_OK) {
-		for (unsigned j = 0; j < i; j++)
+		for (unsigned int j = 0; j < i; j++)
 			unregister_command(cmd_ctx, cmd_prefix, cmds[j].name);
 	}
 	return retval;
@@ -728,12 +728,12 @@ static COMMAND_HELPER(command_help_show_list, bool show_help, const char *cmd_ma
 
 #define HELP_LINE_WIDTH(_n) (int)(76 - (2 * _n))
 
-static void command_help_show_indent(unsigned n)
+static void command_help_show_indent(unsigned int n)
 {
-	for (unsigned i = 0; i < n; i++)
+	for (unsigned int i = 0; i < n; i++)
 		LOG_USER_N("  ");
 }
-static void command_help_show_wrap(const char *str, unsigned n, unsigned n2)
+static void command_help_show_wrap(const char *str, unsigned int n, unsigned int n2)
 {
 	const char *cp = str, *last = str;
 	while (*cp) {
@@ -1317,7 +1317,7 @@ DEFINE_PARSE_NUM_TYPE(_llong, long long, strtoll, LLONG_MIN, LLONG_MAX)
 
 #define DEFINE_PARSE_ULONGLONG(name, type, min, max) \
 	DEFINE_PARSE_WRAPPER(name, type, min, max, unsigned long long, _ullong)
-DEFINE_PARSE_ULONGLONG(_uint, unsigned, 0, UINT_MAX)
+DEFINE_PARSE_ULONGLONG(_uint, unsigned int, 0, UINT_MAX)
 DEFINE_PARSE_ULONGLONG(_u64,  uint64_t, 0, UINT64_MAX)
 DEFINE_PARSE_ULONGLONG(_u32,  uint32_t, 0, UINT32_MAX)
 DEFINE_PARSE_ULONGLONG(_u16,  uint16_t, 0, UINT16_MAX)
@@ -1358,6 +1358,27 @@ int command_parse_bool_arg(const char *in, bool *out)
 	if (command_parse_bool(in, out, "1", "0") == ERROR_OK)
 		return ERROR_OK;
 	return ERROR_COMMAND_SYNTAX_ERROR;
+}
+
+COMMAND_HELPER(command_parse_str_to_buf, const char *str, void *buf, unsigned int buf_len)
+{
+	assert(str);
+	assert(buf);
+
+	int ret = str_to_buf(str, buf, buf_len);
+	if (ret == ERROR_OK)
+		return ret;
+
+	/* Provide a clear error message to the user */
+	if (ret == ERROR_INVALID_NUMBER) {
+		command_print(CMD, "'%s' is not a valid number", str);
+	} else if (ret == ERROR_NUMBER_EXCEEDS_BUFFER) {
+		command_print(CMD, "Number %s exceeds %u bits", str, buf_len);
+	} else {
+		command_print(CMD, "Could not parse number '%s'", str);
+	}
+
+	return ERROR_COMMAND_ARGUMENT_INVALID;
 }
 
 COMMAND_HELPER(handle_command_parse_bool, bool *out, const char *label)

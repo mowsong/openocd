@@ -45,6 +45,7 @@
 
 /* PS register bits (NX) */
 #define XT_PS_DIEXC_MSK                         BIT(2)
+#define XT_PS_DI_MSK                            BIT(3)
 
 /* MS register bits (NX) */
 #define XT_MS_DE_MSK                            BIT(5)
@@ -97,7 +98,7 @@ enum xtensa_ar_scratch_set_e {
 	XT_AR_SCRATCH_NUM
 };
 
-struct xtensa_keyval_info_s {
+struct xtensa_keyval_info {
 	char *chrval;
 	int intval;
 };
@@ -283,7 +284,7 @@ struct xtensa {
 	bool halt_request;
 	uint32_t nx_stop_cause;
 	uint32_t nx_reg_idx[XT_NX_REG_IDX_NUM];
-	struct xtensa_keyval_info_s scratch_ars[XT_AR_SCRATCH_NUM];
+	struct xtensa_keyval_info scratch_ars[XT_AR_SCRATCH_NUM];
 	bool regs_fetched;	/* true after first register fetch completed successfully */
 };
 
@@ -377,18 +378,20 @@ int xtensa_poll(struct target *target);
 void xtensa_on_poll(struct target *target);
 int xtensa_halt(struct target *target);
 int xtensa_resume(struct target *target,
-	int current,
+	bool current,
 	target_addr_t address,
-	int handle_breakpoints,
-	int debug_execution);
+	bool handle_breakpoints,
+	bool debug_execution);
 int xtensa_prepare_resume(struct target *target,
-	int current,
+	bool current,
 	target_addr_t address,
-	int handle_breakpoints,
-	int debug_execution);
+	bool handle_breakpoints,
+	bool debug_execution);
 int xtensa_do_resume(struct target *target);
-int xtensa_step(struct target *target, int current, target_addr_t address, int handle_breakpoints);
-int xtensa_do_step(struct target *target, int current, target_addr_t address, int handle_breakpoints);
+int xtensa_step(struct target *target, bool current, target_addr_t address,
+		bool handle_breakpoints);
+int xtensa_do_step(struct target *target, bool current, target_addr_t address,
+		bool handle_breakpoints);
 int xtensa_mmu_is_enabled(struct target *target, int *enabled);
 int xtensa_read_memory(struct target *target, target_addr_t address, uint32_t size, uint32_t count, uint8_t *buffer);
 int xtensa_read_buffer(struct target *target, target_addr_t address, uint32_t count, uint8_t *buffer);

@@ -252,7 +252,7 @@ static int vdebug_socket_open(char *server_addr, uint32_t port)
 
 #ifdef _WIN32
 	hsock = socket(AF_INET, SOCK_STREAM, IPPROTO_IP);
-	if (hsock == INVALID_SOCKET)
+	if (hsock < 0)
 		rc = vdebug_socket_error();
 #elif defined __CYGWIN__
 	/* SO_RCVLOWAT unsupported on CYGWIN */
@@ -931,11 +931,11 @@ static int vdebug_jtag_tms_seq(const uint8_t *tms, int num, uint8_t f_flush)
 static int vdebug_jtag_path_move(struct pathmove_command *cmd, uint8_t f_flush)
 {
 	uint8_t tms[DIV_ROUND_UP(cmd->num_states, 8)];
-	LOG_DEBUG_IO("path num states %d", cmd->num_states);
+	LOG_DEBUG_IO("path num states %u", cmd->num_states);
 
 	memset(tms, 0, DIV_ROUND_UP(cmd->num_states, 8));
 
-	for (uint8_t i = 0; i < cmd->num_states; i++) {
+	for (unsigned int i = 0; i < cmd->num_states; i++) {
 		if (tap_state_transition(tap_get_state(), true) == cmd->path[i])
 			buf_set_u32(tms, i, 1, 1);
 		tap_set_state(cmd->path[i]);
@@ -944,11 +944,11 @@ static int vdebug_jtag_path_move(struct pathmove_command *cmd, uint8_t f_flush)
 	return vdebug_jtag_tms_seq(tms, cmd->num_states, f_flush);
 }
 
-static int vdebug_jtag_tlr(tap_state_t state, uint8_t f_flush)
+static int vdebug_jtag_tlr(enum tap_state state, uint8_t f_flush)
 {
 	int rc = ERROR_OK;
 
-	tap_state_t cur = tap_get_state();
+	enum tap_state cur = tap_get_state();
 	uint8_t tms_pre = tap_get_tms_path(cur, state);
 	uint8_t num_pre = tap_get_tms_path_len(cur, state);
 	LOG_DEBUG_IO("tlr  from %x to %x", cur, state);
@@ -964,16 +964,16 @@ static int vdebug_jtag_scan(struct scan_command *cmd, uint8_t f_flush)
 {
 	int rc = ERROR_OK;
 
-	tap_state_t cur = tap_get_state();
+	enum tap_state cur = tap_get_state();
 	uint8_t state = cmd->ir_scan ? TAP_IRSHIFT : TAP_DRSHIFT;
 	uint8_t tms_pre = tap_get_tms_path(cur, state);
 	uint8_t num_pre = tap_get_tms_path_len(cur, state);
 	uint8_t tms_post = tap_get_tms_path(state, cmd->end_state);
 	uint8_t num_post = tap_get_tms_path_len(state, cmd->end_state);
-	int num_bits = jtag_scan_size(cmd);
-	LOG_DEBUG_IO("scan len:%d fields:%d ir/!dr:%d state cur:%x end:%x",
+	const unsigned int num_bits = jtag_scan_size(cmd);
+	LOG_DEBUG_IO("scan len:%u fields:%u ir/!dr:%d state cur:%x end:%x",
 			  num_bits, cmd->num_fields, cmd->ir_scan, cur, cmd->end_state);
-	for (int i = 0; i < cmd->num_fields; i++) {
+	for (unsigned int i = 0; i < cmd->num_fields; i++) {
 		uint8_t cur_num_pre = i == 0 ? num_pre : 0;
 		uint8_t cur_tms_pre = i == 0 ? tms_pre : 0;
 		uint8_t cur_num_post = i == cmd->num_fields - 1 ? num_post : 0;
@@ -992,24 +992,24 @@ static int vdebug_jtag_scan(struct scan_command *cmd, uint8_t f_flush)
 	return rc;
 }
 
-static int vdebug_jtag_runtest(int cycles, tap_state_t state, uint8_t f_flush)
+static int vdebug_jtag_runtest(unsigned int num_cycles, enum tap_state state, uint8_t f_flush)
 {
-	tap_state_t cur = tap_get_state();
+	enum tap_state cur = tap_get_state();
 	uint8_t tms_pre = tap_get_tms_path(cur, state);
 	uint8_t num_pre = tap_get_tms_path_len(cur, state);
-	LOG_DEBUG_IO("idle len:%d state cur:%x end:%x", cycles, cur, state);
-	int rc = vdebug_jtag_shift_tap(vdc.hsocket, pbuf, num_pre, tms_pre, cycles, NULL, 0, 0, NULL, f_flush);
+	LOG_DEBUG_IO("idle len:%u state cur:%x end:%x", num_cycles, cur, state);
+	int rc = vdebug_jtag_shift_tap(vdc.hsocket, pbuf, num_pre, tms_pre, num_cycles, NULL, 0, 0, NULL, f_flush);
 	if (cur != state)
 		tap_set_state(state);
 
 	return rc;
 }
 
-static int vdebug_jtag_stableclocks(int num, uint8_t f_flush)
+static int vdebug_jtag_stableclocks(unsigned int num_cycles, uint8_t f_flush)
 {
-	LOG_DEBUG("stab len:%d state cur:%x", num, tap_get_state());
+	LOG_DEBUG("stab len:%u state cur:%x", num_cycles, tap_get_state());
 
-	return vdebug_jtag_shift_tap(vdc.hsocket, pbuf, 0, 0, num, NULL, 0, 0, NULL, f_flush);
+	return vdebug_jtag_shift_tap(vdc.hsocket, pbuf, 0, 0, num_cycles, NULL, 0, 0, NULL, f_flush);
 }
 
 static int vdebug_sleep(int us)

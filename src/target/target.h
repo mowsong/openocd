@@ -23,6 +23,7 @@
 #include <helper/list.h>
 #include "helper/replacements.h"
 #include "helper/system.h"
+#include <helper/types.h>
 #include <jim.h>
 
 struct reg;
@@ -159,7 +160,7 @@ struct target {
 	struct watchpoint *watchpoints;		/* list of watchpoints */
 	struct trace *trace_info;			/* generic trace information */
 	struct debug_msg_receiver *dbgmsg;	/* list of debug message receivers */
-	uint32_t dbg_msg_enabled;			/* debug message status */
+	bool dbg_msg_enabled;				/* debug message status */
 	void *arch_info;					/* architecture specific information */
 	void *private_config;				/* pointer to target specific config data (for jim_configure hook) */
 	struct target *next;				/* next target in list */
@@ -183,7 +184,7 @@ struct target {
 	bool rtos_auto_detect;				/* A flag that indicates that the RTOS has been specified as "auto"
 										 * and must be detected when symbols are offered */
 	struct backoff_timer backoff;
-	int smp;							/* Unique non-zero number for each SMP group */
+	unsigned int smp;					/* Unique non-zero number for each SMP group */
 	struct list_head *smp_targets;		/* list all targets in this smp group/cluster
 										 * The head of the list is shared between the
 										 * cluster, thus here there is a pointer */
@@ -385,8 +386,8 @@ int target_unregister_trace_callback(
  * yet it is possible to detect error conditions.
  */
 int target_poll(struct target *target);
-int target_resume(struct target *target, int current, target_addr_t address,
-		int handle_breakpoints, int debug_execution);
+int target_resume(struct target *target, bool current, target_addr_t address,
+		bool handle_breakpoints, bool debug_execution);
 int target_halt(struct target *target);
 int target_call_event_callbacks(struct target *target, enum target_event event);
 int target_call_reset_callbacks(struct target *target, enum target_reset_mode reset_mode);
@@ -535,7 +536,7 @@ bool target_supports_gdb_connection(const struct target *target);
  * This routine is a wrapper for target->type->step.
  */
 int target_step(struct target *target,
-		int current, target_addr_t address, int handle_breakpoints);
+		bool current, target_addr_t address, bool handle_breakpoints);
 /**
  * Run an algorithm on the @a target given.
  *
@@ -684,7 +685,7 @@ target_addr_t target_address_max(struct target *target);
  *
  * This routine is a wrapper for target->type->address_bits.
  */
-unsigned target_address_bits(struct target *target);
+unsigned int target_address_bits(struct target *target);
 
 /**
  * Return the number of data bits this target supports.
@@ -777,8 +778,8 @@ int target_arch_state(struct target *target);
 void target_handle_event(struct target *t, enum target_event e);
 
 void target_handle_md_output(struct command_invocation *cmd,
-	struct target *target, target_addr_t address, unsigned size,
-	unsigned count, const uint8_t *buffer);
+	struct target *target, target_addr_t address, unsigned int size,
+	unsigned int count, const uint8_t *buffer);
 
 int target_profiling_default(struct target *target, uint32_t *samples, uint32_t
 		max_num_samples, uint32_t *num_samples, uint32_t seconds);
@@ -798,6 +799,7 @@ int target_profiling_default(struct target *target, uint32_t *samples, uint32_t
 #define ERROR_TARGET_ALGO_EXIT  (-313)
 #define ERROR_TARGET_SIZE_NOT_SUPPORTED  (-314)
 #define ERROR_TARGET_PACKING_NOT_SUPPORTED  (-315)
+#define ERROR_TARGET_HALTED_DO_RESUME  (-316)	/* used to workaround incorrect debug halt */
 
 extern bool get_target_reset_nag(void);
 

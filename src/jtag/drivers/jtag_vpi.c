@@ -158,7 +158,7 @@ retry_write:
 
 static int jtag_vpi_receive_cmd(struct vpi_cmd *vpi)
 {
-	unsigned bytes_buffered = 0;
+	unsigned int bytes_buffered = 0;
 	while (bytes_buffered < sizeof(struct vpi_cmd)) {
 		int bytes_to_receive = sizeof(struct vpi_cmd) - bytes_buffered;
 		int retval = read_socket(sockfd, ((char *)vpi) + bytes_buffered, bytes_to_receive);
@@ -254,7 +254,7 @@ static int jtag_vpi_path_move(struct pathmove_command *cmd)
 
 	memset(trans, 0, DIV_ROUND_UP(cmd->num_states, 8));
 
-	for (int i = 0; i < cmd->num_states; i++) {
+	for (unsigned int i = 0; i < cmd->num_states; i++) {
 		if (tap_state_transition(tap_get_state(), true) == cmd->path[i])
 			buf_set_u32(trans, i, 1, 1);
 		tap_set_state(cmd->path[i]);
@@ -272,7 +272,7 @@ static int jtag_vpi_tms(struct tms_command *cmd)
 	return jtag_vpi_tms_seq(cmd->bits, cmd->num_bits);
 }
 
-static int jtag_vpi_state_move(tap_state_t state)
+static int jtag_vpi_state_move(enum tap_state state)
 {
 	if (tap_get_state() == state)
 		return ERROR_OK;
@@ -440,7 +440,7 @@ static int jtag_vpi_scan(struct scan_command *cmd)
 	return ERROR_OK;
 }
 
-static int jtag_vpi_runtest(int cycles, tap_state_t state)
+static int jtag_vpi_runtest(unsigned int num_cycles, enum tap_state state)
 {
 	int retval;
 
@@ -448,29 +448,27 @@ static int jtag_vpi_runtest(int cycles, tap_state_t state)
 	if (retval != ERROR_OK)
 		return retval;
 
-	retval = jtag_vpi_queue_tdi(NULL, cycles, NO_TAP_SHIFT);
+	retval = jtag_vpi_queue_tdi(NULL, num_cycles, NO_TAP_SHIFT);
 	if (retval != ERROR_OK)
 		return retval;
 
 	return jtag_vpi_state_move(state);
 }
 
-static int jtag_vpi_stableclocks(int cycles)
+static int jtag_vpi_stableclocks(unsigned int num_cycles)
 {
 	uint8_t tms_bits[4];
-	int cycles_remain = cycles;
+	unsigned int cycles_remain = num_cycles;
 	int nb_bits;
 	int retval;
-	const int CYCLES_ONE_BATCH = sizeof(tms_bits) * 8;
-
-	assert(cycles >= 0);
+	const unsigned int cycles_one_batch = sizeof(tms_bits) * 8;
 
 	/* use TMS=1 in TAP RESET state, TMS=0 in all other stable states */
 	memset(&tms_bits, (tap_get_state() == TAP_RESET) ? 0xff : 0x00, sizeof(tms_bits));
 
 	/* send the TMS bits */
 	while (cycles_remain > 0) {
-		nb_bits = (cycles_remain < CYCLES_ONE_BATCH) ? cycles_remain : CYCLES_ONE_BATCH;
+		nb_bits = (cycles_remain < cycles_one_batch) ? cycles_remain : cycles_one_batch;
 		retval = jtag_vpi_tms_seq(tms_bits, nb_bits);
 		if (retval != ERROR_OK)
 			return retval;

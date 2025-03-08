@@ -50,7 +50,7 @@ static const char * const openjtag_variant_names[] = {
 /*
  * OpenJTAG-OpenOCD state conversion
  */
-typedef enum openjtag_tap_state {
+enum openjtag_tap_state {
 	OPENJTAG_TAP_INVALID    = -1,
 	OPENJTAG_TAP_RESET  = 0,
 	OPENJTAG_TAP_IDLE   = 1,
@@ -68,7 +68,7 @@ typedef enum openjtag_tap_state {
 	OPENJTAG_TAP_PAUSE_IR   = 13,
 	OPENJTAG_TAP_EXIT2_IR   = 14,
 	OPENJTAG_TAP_UPDATE_IR  = 15,
-} openjtag_tap_state_t;
+};
 
 /* OPENJTAG access library includes */
 #include "libftdi_helper.h"
@@ -748,7 +748,7 @@ static void openjtag_execute_scan(struct jtag_command *cmd)
 static void openjtag_execute_runtest(struct jtag_command *cmd)
 {
 
-	tap_state_t end_state = cmd->cmd.runtest->end_state;
+	enum tap_state end_state = cmd->cmd.runtest->end_state;
 	tap_set_end_state(end_state);
 
 	/* only do a state_move when we're not already in IDLE */
@@ -760,15 +760,17 @@ static void openjtag_execute_runtest(struct jtag_command *cmd)
 	if (openjtag_variant != OPENJTAG_VARIANT_CY7C65215 ||
 		cmd->cmd.runtest->num_cycles) {
 		uint8_t command;
-		int cycles = cmd->cmd.runtest->num_cycles;
+		unsigned int num_cycles = cmd->cmd.runtest->num_cycles;
 
 		do {
+			const unsigned int num_cycles_cmd = MIN(num_cycles, 16);
+
 			command = 7;
-			command |= (((cycles > 16 ? 16 : cycles) - 1) & 0x0F) << 4;
+			command |= ((num_cycles_cmd - 1) & 0x0F) << 4;
 
 			openjtag_add_byte(command);
-			cycles -= 16;
-		} while (cycles > 0);
+			num_cycles -= num_cycles_cmd;
+		} while (num_cycles > 0);
 	}
 
 	tap_set_end_state(end_state);

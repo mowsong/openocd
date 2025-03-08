@@ -104,10 +104,10 @@ static int opendous_init(void);
 static int opendous_quit(void);
 
 /* Queue command functions */
-static void opendous_end_state(tap_state_t state);
+static void opendous_end_state(enum tap_state state);
 static void opendous_state_move(void);
-static void opendous_path_move(int num_states, tap_state_t *path);
-static void opendous_runtest(int num_cycles);
+static void opendous_path_move(unsigned int num_states, enum tap_state *path);
+static void opendous_runtest(unsigned int num_cycles);
 static void opendous_scan(int ir_scan, enum scan_type type, uint8_t *buffer,
 		int scan_size, struct scan_command *command);
 static void opendous_reset(int trst, int srst);
@@ -248,7 +248,7 @@ static int opendous_execute_queue(struct jtag_command *cmd_queue)
 	while (cmd) {
 		switch (cmd->type) {
 			case JTAG_RUNTEST:
-				LOG_DEBUG_IO("runtest %i cycles, end in %i", cmd->cmd.runtest->num_cycles,
+				LOG_DEBUG_IO("runtest %u cycles, end in %i", cmd->cmd.runtest->num_cycles,
 					cmd->cmd.runtest->end_state);
 
 				if (cmd->cmd.runtest->end_state != -1)
@@ -265,7 +265,7 @@ static int opendous_execute_queue(struct jtag_command *cmd_queue)
 				break;
 
 			case JTAG_PATHMOVE:
-				LOG_DEBUG_IO("pathmove: %i states, end in %i",
+				LOG_DEBUG_IO("pathmove: %u states, end in %i",
 					cmd->cmd.pathmove->num_states,
 					cmd->cmd.pathmove->path[cmd->cmd.pathmove->num_states - 1]);
 
@@ -393,7 +393,7 @@ static int opendous_quit(void)
 /***************************************************************************/
 /* Queue command implementations */
 
-void opendous_end_state(tap_state_t state)
+void opendous_end_state(enum tap_state state)
 {
 	if (tap_is_state_stable(state))
 		tap_set_end_state(state);
@@ -419,11 +419,9 @@ void opendous_state_move(void)
 	tap_set_state(tap_get_end_state());
 }
 
-void opendous_path_move(int num_states, tap_state_t *path)
+void opendous_path_move(unsigned int num_states, enum tap_state *path)
 {
-	int i;
-
-	for (i = 0; i < num_states; i++) {
+	for (unsigned int i = 0; i < num_states; i++) {
 		if (path[i] == tap_state_transition(tap_get_state(), false))
 			opendous_tap_append_step(0, 0);
 		else if (path[i] == tap_state_transition(tap_get_state(), true))
@@ -440,11 +438,9 @@ void opendous_path_move(int num_states, tap_state_t *path)
 	tap_set_end_state(tap_get_state());
 }
 
-void opendous_runtest(int num_cycles)
+void opendous_runtest(unsigned int num_cycles)
 {
-	int i;
-
-	tap_state_t saved_end_state = tap_get_end_state();
+	enum tap_state saved_end_state = tap_get_end_state();
 
 	/* only do a state_move when we're not already in IDLE */
 	if (tap_get_state() != TAP_IDLE) {
@@ -453,7 +449,7 @@ void opendous_runtest(int num_cycles)
 	}
 
 	/* execute num_cycles */
-	for (i = 0; i < num_cycles; i++)
+	for (unsigned int i = 0; i < num_cycles; i++)
 		opendous_tap_append_step(0, 0);
 
 	/* finish in end_state */
@@ -464,7 +460,7 @@ void opendous_runtest(int num_cycles)
 
 void opendous_scan(int ir_scan, enum scan_type type, uint8_t *buffer, int scan_size, struct scan_command *command)
 {
-	tap_state_t saved_end_state;
+	enum tap_state saved_end_state;
 
 	opendous_tap_ensure_space(1, scan_size + 8);
 

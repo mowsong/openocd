@@ -175,7 +175,8 @@ static int esp32s3_soc_reset(struct target *target)
 	LOG_DEBUG("Resuming the target");
 	xtensa = target_to_xtensa(target);
 	xtensa->suppress_dsr_errors = true;
-	res = xtensa_resume(target, 0, ESP32_S3_RTC_SLOW_MEM_BASE + 4, 0, 0);
+	res = xtensa_resume(target, false, ESP32_S3_RTC_SLOW_MEM_BASE + 4, false,
+		false);
 	xtensa->suppress_dsr_errors = false;
 	if (res != ERROR_OK) {
 		LOG_ERROR("Failed to run stub (%d)!", res);
@@ -421,4 +422,5 @@ struct target_type esp32s3_target = {
 	.deinit_target = esp_xtensa_target_deinit,
 
 	.commands = esp32s3_command_handlers,
+	.profiling = esp_xtensa_profiling,
 };

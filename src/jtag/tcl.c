@@ -61,7 +61,7 @@ struct jtag_tap *jtag_tap_by_jim_obj(Jim_Interp *interp, Jim_Obj *o)
 	return t;
 }
 
-static bool scan_is_safe(tap_state_t state)
+static bool scan_is_safe(enum tap_state state)
 {
 	switch (state) {
 	    case TAP_RESET:
@@ -87,8 +87,11 @@ static COMMAND_HELPER(handle_jtag_command_drscan_fields, struct scan_field *fiel
 			LOG_ERROR("Out of memory");
 			return ERROR_FAIL;
 		}
+
 		fields[field_count].out_value = t;
-		str_to_buf(CMD_ARGV[i + 1], strlen(CMD_ARGV[i + 1]), t, bits, 0);
+		int ret = CALL_COMMAND_HANDLER(command_parse_str_to_buf, CMD_ARGV[i + 1], t, bits);
+		if (ret != ERROR_OK)
+			return ret;
 		fields[field_count].in_value = t;
 		field_count++;
 	}
@@ -123,7 +126,7 @@ COMMAND_HANDLER(handle_jtag_command_drscan)
 		return ERROR_FAIL;
 	}
 
-	tap_state_t endstate = TAP_IDLE;
+	enum tap_state endstate = TAP_IDLE;
 	if (CMD_ARGC > 3 && !strcmp("-endstate", CMD_ARGV[CMD_ARGC - 2])) {
 		const char *state_name = CMD_ARGV[CMD_ARGC - 1];
 		endstate = tap_state_by_name(state_name);
@@ -173,7 +176,7 @@ fail:
 
 COMMAND_HANDLER(handle_jtag_command_pathmove)
 {
-	tap_state_t states[8];
+	enum tap_state states[8];
 
 	if (CMD_ARGC < 1 || CMD_ARGC > ARRAY_SIZE(states))
 		return ERROR_COMMAND_SYNTAX_ERROR;
@@ -209,8 +212,8 @@ COMMAND_HANDLER(handle_jtag_flush_count)
 	if (CMD_ARGC != 0)
 		return ERROR_COMMAND_SYNTAX_ERROR;
 
-	int count = jtag_get_flush_queue_count();
-	command_print_sameline(CMD, "%d", count);
+	const unsigned int count = jtag_get_flush_queue_count();
+	command_print_sameline(CMD, "%u", count);
 
 	return ERROR_OK;
 }
@@ -445,11 +448,11 @@ static COMMAND_HELPER(handle_jtag_newtap_args, struct jtag_tap *tap)
 			if (!CMD_ARGC)
 				return ERROR_COMMAND_ARGUMENT_INVALID;
 
-			COMMAND_PARSE_NUMBER(int, CMD_ARGV[0], tap->ir_length);
+			COMMAND_PARSE_NUMBER(uint, CMD_ARGV[0], tap->ir_length);
 			CMD_ARGC--;
 			CMD_ARGV++;
-			if (tap->ir_length > (int)(8 * sizeof(tap->ir_capture_value)))
-				LOG_WARNING("%s: huge IR length %d", tap->dotted_name, tap->ir_length);
+			if (tap->ir_length > (8 * sizeof(tap->ir_capture_value)))
+				LOG_WARNING("%s: huge IR length %u", tap->dotted_name, tap->ir_length);
 			break;
 
 		case NTAP_OPT_IRMASK:
@@ -760,8 +763,9 @@ static const struct command_registration jtag_subcommand_handlers[] = {
 		.mode = COMMAND_EXEC,
 		.handler = handle_jtag_configure,
 		.help = "Return any Tcl handler for the specified "
-			"TAP event.",
-		.usage = "tap_name '-event' event_name",
+			"TAP event or the value of the IDCODE found in hardware.",
+		.usage = "tap_name '-event' event_name | "
+		    "tap_name '-idcode'",
 	},
 	{
 		.name = "names",
@@ -799,10 +803,8 @@ COMMAND_HANDLER(handle_scan_chain_command)
 	while (tap) {
 		uint32_t expected, expected_mask, ii;
 
-		snprintf(expected_id, sizeof(expected_id), "0x%08x",
-			(unsigned)((tap->expected_ids_cnt > 0)
-				   ? tap->expected_ids[0]
-				   : 0));
+		snprintf(expected_id, sizeof(expected_id), "0x%08" PRIx32,
+			(tap->expected_ids_cnt > 0) ? tap->expected_ids[0] : 0);
 		if (tap->ignore_version)
 			expected_id[2] = '*';
 
@@ -810,19 +812,18 @@ COMMAND_HANDLER(handle_scan_chain_command)
 		expected_mask = buf_get_u32(tap->expected_mask, 0, tap->ir_length);
 
 		command_print(CMD,
-			"%2d %-18s     %c     0x%08x %s %5d 0x%02x  0x%02x",
+			"%2u %-18s     %c     0x%08x %s %5u 0x%02x  0x%02x",
 			tap->abs_chain_position,
 			tap->dotted_name,
 			tap->enabled ? 'Y' : 'n',
 			(unsigned int)(tap->idcode),
 			expected_id,
-			(unsigned int)(tap->ir_length),
+			tap->ir_length,
 			(unsigned int)(expected),
 			(unsigned int)(expected_mask));
 
 		for (ii = 1; ii < tap->expected_ids_cnt; ii++) {
-			snprintf(expected_id, sizeof(expected_id), "0x%08x",
-				(unsigned) tap->expected_ids[ii]);
+			snprintf(expected_id, sizeof(expected_id), "0x%08" PRIx32, tap->expected_ids[ii]);
 			if (tap->ignore_version)
 				expected_id[2] = '*';
 
@@ -842,7 +843,7 @@ COMMAND_HANDLER(handle_jtag_ntrst_delay_command)
 	if (CMD_ARGC > 1)
 		return ERROR_COMMAND_SYNTAX_ERROR;
 	if (CMD_ARGC == 1) {
-		unsigned delay;
+		unsigned int delay;
 		COMMAND_PARSE_NUMBER(uint, CMD_ARGV[0], delay);
 
 		jtag_set_ntrst_delay(delay);
@@ -856,7 +857,7 @@ COMMAND_HANDLER(handle_jtag_ntrst_assert_width_command)
 	if (CMD_ARGC > 1)
 		return ERROR_COMMAND_SYNTAX_ERROR;
 	if (CMD_ARGC == 1) {
-		unsigned delay;
+		unsigned int delay;
 		COMMAND_PARSE_NUMBER(uint, CMD_ARGV[0], delay);
 
 		jtag_set_ntrst_assert_width(delay);
@@ -872,7 +873,7 @@ COMMAND_HANDLER(handle_jtag_rclk_command)
 
 	int retval = ERROR_OK;
 	if (CMD_ARGC == 1) {
-		unsigned khz = 0;
+		unsigned int khz = 0;
 		COMMAND_PARSE_NUMBER(uint, CMD_ARGV[0], khz);
 
 		retval = adapter_config_rclk(khz);
@@ -898,7 +899,7 @@ COMMAND_HANDLER(handle_runtest_command)
 	if (CMD_ARGC != 1)
 		return ERROR_COMMAND_SYNTAX_ERROR;
 
-	unsigned num_clocks;
+	unsigned int num_clocks;
 	COMMAND_PARSE_NUMBER(uint, CMD_ARGV[0], num_clocks);
 
 	jtag_add_runtest(num_clocks, TAP_IDLE);
@@ -918,7 +919,7 @@ COMMAND_HANDLER(handle_irscan_command)
 	int i;
 	struct scan_field *fields;
 	struct jtag_tap *tap = NULL;
-	tap_state_t endstate;
+	enum tap_state endstate;
 
 	if ((CMD_ARGC < 2) || (CMD_ARGC % 2))
 		return ERROR_COMMAND_SYNTAX_ERROR;
@@ -968,7 +969,7 @@ COMMAND_HANDLER(handle_irscan_command)
 		if (retval != ERROR_OK)
 			goto error_return;
 
-		int field_size = tap->ir_length;
+		unsigned int field_size = tap->ir_length;
 		fields[i].num_bits = field_size;
 		uint8_t *v = calloc(1, DIV_ROUND_UP(field_size, 8));
 		if (!v) {

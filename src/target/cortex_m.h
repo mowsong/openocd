@@ -31,16 +31,16 @@
 
 #define CPUID		0xE000ED00
 
-#define ARM_CPUID_IMPLEMENTOR_POS	24
-#define ARM_CPUID_IMPLEMENTOR_MASK	(0xFF << ARM_CPUID_IMPLEMENTOR_POS)
+#define ARM_CPUID_IMPLEMENTER_POS	24
+#define ARM_CPUID_IMPLEMENTER_MASK	(0xFF << ARM_CPUID_IMPLEMENTER_POS)
 #define ARM_CPUID_PARTNO_POS		4
 #define ARM_CPUID_PARTNO_MASK		(0xFFF << ARM_CPUID_PARTNO_POS)
 
-#define ARM_MAKE_CPUID(impl, partno)	((((impl) << ARM_CPUID_IMPLEMENTOR_POS) & ARM_CPUID_IMPLEMENTOR_MASK) | \
+#define ARM_MAKE_CPUID(impl, partno)	((((impl) << ARM_CPUID_IMPLEMENTER_POS) & ARM_CPUID_IMPLEMENTER_MASK) | \
 	(((partno) << ARM_CPUID_PARTNO_POS)  & ARM_CPUID_PARTNO_MASK))
 
 /** Known Arm Cortex masked CPU Ids
- * This includes the implementor and part number, but _not_ the revision or
+ * This includes the implementer and part number, but _not_ the revision or
  * patch fields.
  */
 enum cortex_m_impl_part {
@@ -150,6 +150,7 @@ struct cortex_m_part_info {
 #define VC_CORERESET	BIT(0)
 
 /* DCB_DSCSR bit and field definitions */
+#define DSCSR_CDSKEY	BIT(17)
 #define DSCSR_CDS		BIT(16)
 
 /* NVIC registers */
@@ -257,6 +258,10 @@ struct cortex_m_common {
 	/* Whether this target has the erratum that makes C_MASKINTS not apply to
 	 * already pending interrupts */
 	bool maskints_erratum;
+
+	/* Errata 3092511 Cortex-M7 can halt in an incorrect address when breakpoint
+	 * and exception occurs simultaneously */
+	bool incorrect_halt_erratum;
 };
 
 static inline bool is_cortex_m_or_hla(const struct cortex_m_common *cortex_m)

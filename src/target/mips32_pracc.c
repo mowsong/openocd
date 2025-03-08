@@ -212,7 +212,7 @@ static int mips32_pracc_exec(struct mips_ejtag *ejtag_info, struct pracc_queue_i
 			store_pending--;
 
 		} else {					/* read/fetch access */
-			 if (!final_check) {			/* executing function code */
+			if (!final_check) {			/* executing function code */
 				/* check address */
 				if (ejtag_info->pa_addr != (MIPS32_PRACC_TEXT + code_count * 4)) {
 					LOG_DEBUG("reading at unexpected address %" PRIx32 ", expected %x",
@@ -243,7 +243,7 @@ static int mips32_pracc_exec(struct mips_ejtag *ejtag_info, struct pracc_queue_i
 				if (code_count == ctx->code_count)	/* last instruction, start final check */
 					final_check = 1;
 
-			 } else {	/* final check after function code shifted out */
+			} else {	/* final check after function code shifted out */
 					/* check address */
 				if (ejtag_info->pa_addr == MIPS32_PRACC_TEXT) {
 					if (!pass) {	/* first pass through pracc text */
@@ -275,7 +275,7 @@ static int mips32_pracc_exec(struct mips_ejtag *ejtag_info, struct pracc_queue_i
 					}
 				instr = MIPS32_NOP;	/* shift out NOPs instructions */
 				code_count++;
-			 }
+			}
 
 			/* Send instruction out */
 			mips_ejtag_set_instr(ejtag_info, EJTAG_INST_DATA);
@@ -370,7 +370,7 @@ int mips32_pracc_queue_exec(struct mips_ejtag *ejtag_info, struct pracc_queue_in
 		return ERROR_FAIL;
 	}
 
-	unsigned num_clocks =
+	unsigned int num_clocks =
 		((uint64_t)(ejtag_info->scan_delay) * adapter_get_speed_khz() + 500000) / 1000000;
 
 	uint32_t ejtag_ctrl = ejtag_info->ejtag_ctrl & ~EJTAG_CTRL_PRACC;
@@ -400,7 +400,7 @@ int mips32_pracc_queue_exec(struct mips_ejtag *ejtag_info, struct pracc_queue_in
 		ejtag_ctrl = buf_get_u32(scan_in[scan_count].scan_32.ctrl, 0, 32);
 		uint32_t addr = buf_get_u32(scan_in[scan_count].scan_32.addr, 0, 32);
 		if (!(ejtag_ctrl & EJTAG_CTRL_PRACC)) {
-			LOG_ERROR("Error: access not pending  count: %d", scan_count);
+			LOG_ERROR("Access not pending, count: %d", scan_count);
 			retval = ERROR_FAIL;
 			goto exit;
 		}
@@ -584,6 +584,26 @@ int mips32_cp0_write(struct mips_ejtag *ejtag_info, uint32_t val, uint32_t cp0_r
 	pracc_add(&ctx, 0, MIPS32_MFC0(ctx.isa, 15, 31, 0));			/* restore $15 from DeSave */
 
 	ctx.retval = mips32_pracc_queue_exec(ejtag_info, &ctx, NULL, 1);
+	pracc_queue_free(&ctx);
+	return ctx.retval;
+}
+
+int mips32_cp1_control_read(struct mips_ejtag *ejtag_info, uint32_t *val, uint32_t cp1_c_reg)
+{
+	struct pracc_queue_info ctx = {.ejtag_info = ejtag_info};
+	pracc_queue_init(&ctx);
+
+	pracc_add(&ctx, 0, MIPS32_LUI(ctx.isa, 15, PRACC_UPPER_BASE_ADDR));	/* $15 = MIPS32_PRACC_BASE_ADDR */
+	pracc_add(&ctx, 0, MIPS32_EHB(ctx.isa));
+	pracc_add(&ctx, 0, MIPS32_CFC1(ctx.isa, 8, cp1_c_reg));			/* move cp1c reg to $8 */
+	pracc_add(&ctx, MIPS32_PRACC_PARAM_OUT,
+				MIPS32_SW(ctx.isa, 8, PRACC_OUT_OFFSET, 15));	/* store $8 to pracc_out */
+	pracc_add(&ctx, 0, MIPS32_MFC0(ctx.isa, 15, 31, 0));				/* restore $15 from DeSave */
+	pracc_add(&ctx, 0, MIPS32_LUI(ctx.isa, 8, UPPER16(ejtag_info->reg8)));	/* restore upper 16 bits  of $8 */
+	pracc_add(&ctx, 0, MIPS32_B(ctx.isa, NEG16((ctx.code_count + 1) << ctx.isa)));		/* jump to start */
+	pracc_add(&ctx, 0, MIPS32_ORI(ctx.isa, 8, 8, LOWER16(ejtag_info->reg8))); /* restore lower 16 bits of $8 */
+
+	ctx.retval = mips32_pracc_queue_exec(ejtag_info, &ctx, val, 1);
 	pracc_queue_free(&ctx);
 	return ctx.retval;
 }
@@ -856,6 +876,10 @@ int mips32_pracc_write_regs(struct mips32_common *mips32)
 	struct pracc_queue_info ctx = {.ejtag_info = ejtag_info};
 	uint32_t *gprs = mips32->core_regs.gpr;
 	uint32_t *c0rs = mips32->core_regs.cp0;
+	bool fpu_in_64bit = ((c0rs[0] & BIT(MIPS32_CP0_STATUS_FR_SHIFT)) != 0);
+	bool fp_enabled = ((c0rs[0] & BIT(MIPS32_CP0_STATUS_CU1_SHIFT)) != 0);
+	bool dsp_enabled = ((c0rs[0] & BIT(MIPS32_CP0_STATUS_MX_SHIFT)) != 0);
+	uint32_t rel = (ejtag_info->config[0] & MIPS32_CONFIG0_AR_MASK) >> MIPS32_CONFIG0_AR_SHIFT;
 
 	pracc_queue_init(&ctx);
 
@@ -895,6 +919,59 @@ int mips32_pracc_write_regs(struct mips32_common *mips32)
 
 	if (mips32_cpu_support_hazard_barrier(ejtag_info))
 		pracc_add(&ctx, 0, MIPS32_EHB(ctx.isa));
+
+	/* store FPRs */
+	if (mips32->fp_imp && fp_enabled) {
+		uint64_t *fprs = mips32->core_regs.fpr;
+		if (fpu_in_64bit) {
+			for (int i = 0; i != MIPS32_REG_FP_COUNT; i++) {
+				uint32_t fp_lo = fprs[i] & 0xffffffff;
+				uint32_t fp_hi = (fprs[i] >> 32) & 0xffffffff;
+				pracc_add_li32(&ctx, 2, fp_lo, 0);
+				pracc_add_li32(&ctx, 3, fp_hi, 0);
+				pracc_add(&ctx, 0, MIPS32_MTC1(ctx.isa, 2, i));
+				pracc_add(&ctx, 0, MIPS32_MTHC1(ctx.isa, 3, i));
+			}
+		} else {
+			for (int i = 0; i != MIPS32_REG_FP_COUNT; i++) {
+				uint32_t fp_lo = fprs[i] & 0xffffffff;
+				pracc_add_li32(&ctx, 2, fp_lo, 0);
+				pracc_add(&ctx, 0, MIPS32_MTC1(ctx.isa, 2, i));
+			}
+		}
+
+		if (rel > MIPS32_RELEASE_1)
+			pracc_add(&ctx, 0, MIPS32_EHB(ctx.isa));
+	}
+
+	/* Store DSP Accumulators */
+	if (mips32->dsp_imp && dsp_enabled) {
+		/* Struct of mips32_dsp_regs: {ac{hi, lo}1-3, dspctl} */
+		uint32_t *dspr = mips32->core_regs.dsp;
+		size_t dsp_regs = ARRAY_SIZE(mips32->core_regs.dsp);
+
+		/* Starts from ac1, core_regs.dsp contains dspctl register, therefore - 1 */
+		for (size_t index = 0; index != ((dsp_regs - 1) / 2); index++) {
+			/* Every accumulator have 2 registers, hi and lo, and core_regs.dsp stores ac[1~3] */
+			/* reads hi[ac] from core_regs array */
+			pracc_add_li32(&ctx, 2, dspr[index * 2], 0);
+			/* reads lo[ac] from core_regs array */
+			pracc_add_li32(&ctx, 3, dspr[(index * 2) + 1], 0);
+
+			/* Write to accumulator 1~3 and index starts from 0, therefore ac = index + 1 */
+			size_t ac = index + 1;
+			pracc_add(&ctx, 0, MIPS32_DSP_MTHI(2, ac));
+			pracc_add(&ctx, 0, MIPS32_DSP_MTLO(3, ac));
+		}
+
+		/* DSPCTL is the last element of register store */
+		pracc_add_li32(&ctx, 2, dspr[6], 0);
+		pracc_add(&ctx, 0, MIPS32_DSP_WRDSP(2, 0x1F));
+
+		if (rel > MIPS32_RELEASE_1)
+			pracc_add(&ctx, 0, MIPS32_EHB(ctx.isa));
+	}
+
 	/* load registers 2 to 31 with li32, optimize */
 	for (int i = 2; i < 32; i++)
 		pracc_add_li32(&ctx, i, gprs[i], 1);
@@ -1014,13 +1091,18 @@ int mips32_pracc_read_regs(struct mips32_common *mips32)
 	struct mips32_core_regs *core_regs = &mips32->core_regs;
 	unsigned int offset_gpr = ((uint8_t *)&core_regs->gpr[0]) - (uint8_t *)core_regs;
 	unsigned int offset_cp0 = ((uint8_t *)&core_regs->cp0[0]) - (uint8_t *)core_regs;
+	unsigned int offset_fpr = ((uint8_t *)&core_regs->fpr[0]) - (uint8_t *)core_regs;
+	unsigned int offset_fpcr = ((uint8_t *)&core_regs->fpcr[0]) - (uint8_t *)core_regs;
+	unsigned int offset_dsp = ((uint8_t *)&core_regs->dsp[0]) - (uint8_t *)core_regs;
+	bool fp_enabled, dsp_enabled;
 
 	/*
-	 * This procedure has to be in 2 distinctive steps, because we can
-	 * only know whether FP is enabled after reading CP0.
+	 * This procedure has to be in 3 distinctive steps, because we can
+	 * only know whether FP and DSP are enabled after reading CP0.
 	 *
-	 * Step 1: Read everything except CP1 stuff
+	 * Step 1: Read everything except CP1 and DSP stuff
 	 * Step 2: Read CP1 stuff if FP is implemented
+	 * Step 3: Read DSP registers if dsp is implemented
 	 */
 
 	pracc_queue_init(&ctx);
@@ -1040,11 +1122,108 @@ int mips32_pracc_read_regs(struct mips32_common *mips32)
 	ejtag_info->reg8 = mips32->core_regs.gpr[8];
 	ejtag_info->reg9 = mips32->core_regs.gpr[9];
 
+	if (ctx.retval != ERROR_OK)
+		return ctx.retval;
+
 	/* we only care if FP is actually impl'd and if cp1 is enabled */
 	/* since we already read cp0 in the prev step */
 	/* now we know what's in cp0.status */
-	/* TODO: Read FPRs */
+	fp_enabled = (mips32->core_regs.cp0[0] & BIT(MIPS32_CP0_STATUS_CU1_SHIFT)) != 0;
+	if (mips32->fp_imp && fp_enabled) {
+		pracc_queue_init(&ctx);
 
+		mips32_pracc_store_regs_set_base_addr(&ctx);
+
+		/* FCSR */
+		pracc_add(&ctx, 0, MIPS32_CFC1(ctx.isa, 8, 31));
+		pracc_add(&ctx, MIPS32_PRACC_PARAM_OUT + offset_fpcr,
+				  MIPS32_SW(ctx.isa, 8, PRACC_OUT_OFFSET + offset_fpcr, 1));
+
+		/* FIR */
+		pracc_add(&ctx, 0, MIPS32_CFC1(ctx.isa, 8, 0));
+		pracc_add(&ctx, MIPS32_PRACC_PARAM_OUT + offset_fpcr + 4,
+				  MIPS32_SW(ctx.isa, 8, PRACC_OUT_OFFSET + offset_fpcr + 4, 1));
+
+		/* f0 to f31 */
+		if (mips32->fpu_in_64bit) {
+			for (int i = 0; i != 32; i++) {
+				size_t offset = offset_fpr + (i * 8);
+				/* current pracc implementation (or EJTAG itself) only supports 32b access */
+				/* so there is no way to use SDC1 */
+
+				/* lower half */
+				pracc_add(&ctx, 0, MIPS32_MFC1(ctx.isa, 8, i));
+				pracc_add(&ctx, MIPS32_PRACC_PARAM_OUT + offset,
+						  MIPS32_SW(ctx.isa, 8, PRACC_OUT_OFFSET + offset, 1));
+
+				/* upper half */
+				pracc_add(&ctx, 0, MIPS32_MFHC1(ctx.isa, 8, i));
+				pracc_add(&ctx, MIPS32_PRACC_PARAM_OUT + offset + 4,
+						  MIPS32_SW(ctx.isa, 8, PRACC_OUT_OFFSET + offset + 4, 1));
+			}
+		} else {
+			for (int i = 0; i != 32; i++) {
+				size_t offset = offset_fpr + (i * 8);
+				pracc_add(&ctx, MIPS32_PRACC_PARAM_OUT + offset,
+						  MIPS32_SWC1(ctx.isa, i, PRACC_OUT_OFFSET + offset, 1));
+			}
+		}
+
+		mips32_pracc_store_regs_restore(&ctx);
+
+		/* jump to start */
+		pracc_add(&ctx, 0, MIPS32_B(ctx.isa, NEG16((ctx.code_count + 1) << ctx.isa)));
+		/* load $15 in DeSave */
+		pracc_add(&ctx, 0, MIPS32_MTC0(ctx.isa, 15, 31, 0));
+
+		ctx.retval = mips32_pracc_queue_exec(ejtag_info, &ctx, (uint32_t *)&mips32->core_regs, 1);
+
+		pracc_queue_free(&ctx);
+	}
+
+	dsp_enabled = (mips32->core_regs.cp0[MIPS32_REG_C0_STATUS_INDEX] & BIT(MIPS32_CP0_STATUS_MX_SHIFT)) != 0;
+	if (mips32->dsp_imp && dsp_enabled) {
+		pracc_queue_init(&ctx);
+
+		mips32_pracc_store_regs_set_base_addr(&ctx);
+
+		/* Struct of mips32_dsp_regs[7]: {ac{hi, lo}1-3, dspctl} */
+		size_t dsp_regs = ARRAY_SIZE(mips32->core_regs.dsp);
+		/* Starts from ac1, core_regs.dsp have dspctl register, therefore - 1 */
+		for (size_t index = 0; index != ((dsp_regs - 1) / 2); index++) {
+			/* Every accumulator have 2 registers, hi&lo, and core_regs.dsp stores ac[1~3] */
+			/* Reads offset of hi[ac] from core_regs array */
+			size_t offset_hi = offset_dsp + ((index * 2) * sizeof(uint32_t));
+			/* Reads offset of lo[ac] from core_regs array */
+			size_t offset_lo = offset_dsp + (((index * 2) + 1) * sizeof(uint32_t));
+
+			/* DSP Ac registers starts from 1 and index starts from 0, therefore ac = index + 1 */
+			size_t ac = index + 1;
+			pracc_add(&ctx, 0, MIPS32_DSP_MFHI(8, ac));
+			pracc_add(&ctx, MIPS32_PRACC_PARAM_OUT + offset_hi,
+					MIPS32_SW(ctx.isa, 8, PRACC_OUT_OFFSET + offset_hi, 1));
+			pracc_add(&ctx, 0, MIPS32_DSP_MFLO(8, ac));
+			pracc_add(&ctx, MIPS32_PRACC_PARAM_OUT + offset_lo,
+					MIPS32_SW(ctx.isa, 8, PRACC_OUT_OFFSET + offset_lo, 1));
+		}
+
+		/* DSPCTL is the last element of register store */
+		pracc_add(&ctx, 0, MIPS32_DSP_RDDSP(8, 0x3F));
+		pracc_add(&ctx, MIPS32_PRACC_PARAM_OUT + offset_dsp + ((dsp_regs - 1) * sizeof(uint32_t)),
+				  MIPS32_SW(ctx.isa, 8,
+							PRACC_OUT_OFFSET + offset_dsp + ((dsp_regs - 1) * sizeof(uint32_t)), 1));
+
+		mips32_pracc_store_regs_restore(&ctx);
+
+		/* jump to start */
+		pracc_add(&ctx, 0, MIPS32_B(ctx.isa, NEG16((ctx.code_count + 1) << ctx.isa)));
+		/* load $15 in DeSave */
+		pracc_add(&ctx, 0, MIPS32_MTC0(ctx.isa, 15, 31, 0));
+
+		ctx.retval = mips32_pracc_queue_exec(ejtag_info, &ctx, (uint32_t *)&mips32->core_regs, 1);
+
+		pracc_queue_free(&ctx);
+	}
 	return ctx.retval;
 }
 
@@ -1183,7 +1362,7 @@ int mips32_pracc_fastdata_xfer(struct mips_ejtag *ejtag_info, struct working_are
 	pracc_swap16_array(ejtag_info, jmp_code, ARRAY_SIZE(jmp_code));
 
 	/* execute jump code, with no address check */
-	for (unsigned i = 0; i < ARRAY_SIZE(jmp_code); i++) {
+	for (unsigned int i = 0; i < ARRAY_SIZE(jmp_code); i++) {
 		int retval = wait_for_pracc_rw(ejtag_info);
 		if (retval != ERROR_OK)
 			return retval;
@@ -1218,7 +1397,7 @@ int mips32_pracc_fastdata_xfer(struct mips_ejtag *ejtag_info, struct working_are
 	mips_ejtag_set_instr(ejtag_info, EJTAG_INST_FASTDATA);
 	mips_ejtag_fastdata_scan(ejtag_info, 1, &val);
 
-	unsigned num_clocks = 0;	/* like in legacy code */
+	unsigned int num_clocks = 0;	/* like in legacy code */
 	if (ejtag_info->mode != 0)
 		num_clocks = ((uint64_t)(ejtag_info->scan_delay) * adapter_get_speed_khz() + 500000) / 1000000;
 
