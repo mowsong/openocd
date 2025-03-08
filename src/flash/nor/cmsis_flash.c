@@ -1,23 +1,23 @@
 /***************************************************************************
- *                                                                         *
- *   Copyright (C) 2018 by Bohdan Tymkiv                                   *
- *   bohdan.tymkiv@infineon.com bohdan200@gmail.com                        *
- *                                                                         *
- *   Copyright (C) <2019-2021>                                             *
- *     <Cypress Semiconductor Corporation (an Infineon company)>           *
- *                                                                         *
- *   This program is free software; you can redistribute it and/or modify  *
- *   it under the terms of the GNU General Public License as published by  *
- *   the Free Software Foundation; either version 2 of the License, or     *
- *   (at your option) any later version.                                   *
- *                                                                         *
- *   This program is distributed in the hope that it will be useful,       *
- *   but WITHOUT ANY WARRANTY; without even the implied warranty of        *
- *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the         *
- *   GNU General Public License for more details.                          *
- *                                                                         *
- *   You should have received a copy of the GNU General Public License     *
- *   along with this program.  If not, see <http://www.gnu.org/licenses/>. *
+ *																																				 *
+ *	 Copyright (C) 2018 by Bohdan Tymkiv																	 *
+ *	 bohdan.tymkiv@infineon.com bohdan200@gmail.com												 *
+ *																																				 *
+ *	 Copyright (C) <2019-2021>																						 *
+ *		 <Cypress Semiconductor Corporation (an Infineon company)>					 *
+ *																																				 *
+ *	 This program is free software; you can redistribute it and/or modify	 *
+ *	 it under the terms of the GNU General Public License as published by	 *
+ *	 the Free Software Foundation; either version 2 of the License, or		 *
+ *	 (at your option) any later version.																	 *
+ *																																				 *
+ *	 This program is distributed in the hope that it will be useful,			 *
+ *	 but WITHOUT ANY WARRANTY; without even the implied warranty of				 *
+ *	 MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.	 See the				 *
+ *	 GNU General Public License for more details.													 *
+ *																																				 *
+ *	 You should have received a copy of the GNU General Public License		 *
+ *	 along with this program.	 If not, see <http://www.gnu.org/licenses/>. *
  ***************************************************************************/
 
 #ifdef HAVE_CONFIG_H
@@ -102,7 +102,7 @@ struct ram_params {
 };
 
 const uint8_t program_page_wrapper[] = {
- 	#include "../../../contrib/loaders/flash/cmsis_flash/program_page.inc"
+	#include "../../../contrib/loaders/flash/cmsis_flash/program_page.inc"
 };
 
 /** ***********************************************************************************************
@@ -114,7 +114,7 @@ const uint8_t program_page_wrapper[] = {
  *************************************************************************************************/
 static int cmsis_flash_load_algo(struct cmsis_flash *algo, struct target *target)
 {
-  LOG_DEBUG("---> cmsis_flash_load_algo");
+	LOG_DEBUG("---> cmsis_flash_load_algo");
 
 	if (algo->is_loaded) {
 		LOG_ERROR("CMSIS algorithm already loaded");
@@ -171,7 +171,7 @@ free_wa:
  *************************************************************************************************/
 static int cmsis_flash_unload_algo(struct cmsis_flash *algo, struct target *target)
 {
-  LOG_DEBUG("---> cmsis_flash_unload_algo");
+	LOG_DEBUG("---> cmsis_flash_unload_algo");
 	if (!algo->is_loaded) {
 		LOG_ERROR("CMSIS algorithm already unloaded");
 		return ERROR_FAIL;
@@ -272,7 +272,7 @@ static int cmsis_algo_execute(struct cmsis_flash *algo, struct target *target,
 	uint32_t fn_offset, size_t timeout, uint32_t *result, size_t argc, ...)
 {
 	assert(argc <= 4);
-  LOG_DEBUG("---> cmsis_algo_execute");
+	LOG_DEBUG("---> cmsis_algo_execute");
 
 	/* TODO: only ARMv6M/v7M are currently supported. I have no experience with other ARM architectures
 	 * so I can not make this code completely generic. This will be fixed in the future */
@@ -300,13 +300,13 @@ static int cmsis_algo_execute(struct cmsis_flash *algo, struct target *target,
 			/* loop through arguments and populate r0...r3 registers */
 			enum param_direction dir = (i == 0) ? PARAM_IN_OUT : PARAM_OUT;
 			init_reg_param(&regs[i], param_regs[i], 32, dir);
-			buf_set_u32(regs[i].value, 0, 32,  va_arg(args, uint32_t));
+			buf_set_u32(regs[i].value, 0, 32,	 va_arg(args, uint32_t));
 			param_cnt++;
 		}
 	} else {
 		/* No arguments have been supplied, r0 is PARAM_IN in this case */
 		init_reg_param(&regs[0], param_regs[0], 32, PARAM_IN);
-		buf_set_u32(regs[0].value, 0, 32,  0);
+		buf_set_u32(regs[0].value, 0, 32,	 0);
 		param_cnt++;
 	}
 	va_end(args);
@@ -320,19 +320,19 @@ static int cmsis_algo_execute(struct cmsis_flash *algo, struct target *target,
 	init_reg_param(&regs[param_cnt + 2], "lr", 32, PARAM_OUT);
 
 	buf_set_u32(regs[param_cnt + 0].value, 0, 32, wa->address + algo->of_prg_data);
-  buf_set_u32(regs[param_cnt + 1].value, 0, 32, wa->address + wa->size);
+	buf_set_u32(regs[param_cnt + 1].value, 0, 32, wa->address + wa->size);
 	buf_set_u32(regs[param_cnt + 2].value, 0, 32, bkpt_adddr | 0x01);
-  
-  LOG_DEBUG("writing SP with value 0x%08x", 
-    buf_get_u32(regs[param_cnt + 1].value, 0, 32));
-  LOG_DEBUG("writing LR with value 0x%08x", 
-    buf_get_u32(regs[param_cnt + 2].value, 0, 32));
+	
+	LOG_DEBUG("writing SP with value 0x%08x", 
+		buf_get_u32(regs[param_cnt + 1].value, 0, 32));
+	LOG_DEBUG("writing LR with value 0x%08x", 
+		buf_get_u32(regs[param_cnt + 2].value, 0, 32));
 	
 	param_cnt += 3;
 
 	/* Write 'BKPT #0' instruction */
 	hr = target_write_u32(target, bkpt_adddr, 0xBE00BE00);
-  if (hr != ERROR_OK)
+	if (hr != ERROR_OK)
 		goto cleanup;
 
 	/* Operation can take a while, send keep_alive packet here */
@@ -346,7 +346,7 @@ static int cmsis_algo_execute(struct cmsis_flash *algo, struct target *target,
 
 	/* Retrieve algorithm exit code */
 	*result = buf_get_u32(regs[0].value, 0, 32);
-  LOG_DEBUG("---> cmsis_algo_execute return code %d", *result);
+	LOG_DEBUG("---> cmsis_algo_execute return code %d", *result);
 
 cleanup:
 	for (size_t i = 0; i < param_cnt; i++)
@@ -367,7 +367,7 @@ cleanup:
 static int cmsis_algo_init(struct cmsis_flash *algo, struct target *target, uint32_t address,
 	uint32_t clock, enum cmsis_operation op)
 {
-  LOG_DEBUG("---> cmsis_algo_init");
+	LOG_DEBUG("---> cmsis_algo_init");
 	if (algo->init_op != CMSIS_OPERATION_INVALID) {
 		LOG_ERROR("CMSIS algorithm already initialized");
 		return ERROR_FAIL;
@@ -398,7 +398,7 @@ static int cmsis_algo_init(struct cmsis_flash *algo, struct target *target, uint
  *************************************************************************************************/
 static int cmsis_algo_uninit(struct cmsis_flash *algo, struct target *target, uint32_t op)
 {
-  LOG_DEBUG("---> cmsis_algo_uinit");
+	LOG_DEBUG("---> cmsis_algo_uinit");
 
 	if (algo->init_op == CMSIS_OPERATION_INVALID) {
 		LOG_ERROR("CMSIS algorithm already uninitialized");
@@ -437,7 +437,7 @@ static int cmsis_algo_uninit(struct cmsis_flash *algo, struct target *target, ui
  *************************************************************************************************/
 static int cmsis_algo_blank_check(struct cmsis_flash *algo, struct target *target, uint32_t addr, uint32_t size, int *is_erased)
 {
-  LOG_DEBUG("---> cmsis_algo_blank_check");
+	LOG_DEBUG("---> cmsis_algo_blank_check");
 
 	uint32_t result = 0;
 	int hr = cmsis_algo_execute(algo, target, algo->of_blank_check,
@@ -462,7 +462,7 @@ static int cmsis_algo_blank_check(struct cmsis_flash *algo, struct target *targe
  *************************************************************************************************/
 static int cmsis_algo_erase_sector(struct cmsis_flash *algo, struct target *target, uint32_t addr)
 {
-  LOG_DEBUG("---> cmsis_algo_erase_sector");
+	LOG_DEBUG("---> cmsis_algo_erase_sector");
 
 	uint32_t result = 0;
 	int hr = cmsis_algo_execute(algo, target, algo->of_erase_sector,
@@ -487,7 +487,7 @@ static int cmsis_algo_erase_sector(struct cmsis_flash *algo, struct target *targ
  *************************************************************************************************/
 static int cmsis_algo_erase_chip(struct cmsis_flash *algo, struct target *target, uint32_t timeout)
 {
-  LOG_DEBUG("---> cmsis_algo_erase_chip");
+	LOG_DEBUG("---> cmsis_algo_erase_chip");
 
 	if (algo->of_erase_chip == UINT32_MAX)
 		return ERROR_COMMAND_NOTFOUND;
@@ -519,10 +519,10 @@ static int cmsis_algo_erase_chip(struct cmsis_flash *algo, struct target *target
 static int cmsis_algo_program_page(struct cmsis_flash *algo, struct target *target, uint32_t addr,
 	uint32_t size, uint32_t buf_addr)
 {
-  LOG_DEBUG("---> cmsis_algo_program_page");
+	LOG_DEBUG("---> cmsis_algo_program_page");
 
 	uint32_t result = 0;
-  LOG_DEBUG("algo->flash_dev.timeout_prog is %d", algo->flash_dev.timeout_prog);
+	LOG_DEBUG("algo->flash_dev.timeout_prog is %d", algo->flash_dev.timeout_prog);
 	int hr = cmsis_algo_execute(algo, target, algo->of_program_page,
 			algo->flash_dev.timeout_prog, &result, 3, addr, size, buf_addr);
 
@@ -545,7 +545,7 @@ static int cmsis_algo_program_page(struct cmsis_flash *algo, struct target *targ
  *************************************************************************************************/
 static int cmsis_flash_prepare_algo(struct flash_bank *bank, enum cmsis_operation op)
 {
-  LOG_DEBUG("---> cmsis_flash_prepare_algo");
+	LOG_DEBUG("---> cmsis_flash_prepare_algo");
 
 	struct cmsis_flash *algo = bank->driver_priv;
 	struct target *target = bank->target;
@@ -572,14 +572,14 @@ static int cmsis_flash_prepare_algo(struct flash_bank *bank, enum cmsis_operatio
  *************************************************************************************************/
 static void cmsis_flash_release_algo(struct flash_bank *bank)
 {
-  LOG_DEBUG("---> cmsis_flash_release_algo");
+	LOG_DEBUG("---> cmsis_flash_release_algo");
 
 	struct cmsis_flash *algo = bank->driver_priv;
 	struct target *target = bank->target;
 
 	cmsis_algo_uninit(algo, target, algo->init_op);
 
-  /***** The following does not work for STM32F4 and STM32G0 *****/
+	/***** The following does not work for STM32F4 and STM32G0 *****/
 	/* Hack: Reinitialize algo to make sure memory is mapped for read/verify/mdw */
 	//cmsis_algo_init(algo, target, (uint32_t)bank->base, 0, CMSIS_OPERATION_VERIFY);
 	//algo->init_op = CMSIS_OPERATION_INVALID; 
@@ -594,7 +594,7 @@ static void cmsis_flash_release_algo(struct flash_bank *bank)
  *************************************************************************************************/
 static int cmsis_flash_probe(struct flash_bank *bank)
 {
-  LOG_DEBUG("---> cmsis_flash_probe");
+	LOG_DEBUG("---> cmsis_flash_probe");
 
 	int hr;
 	struct cmsis_flash *algo = bank->driver_priv;
@@ -746,8 +746,8 @@ static int cmsis_flash_protect(struct flash_bank *bank, int set, unsigned int fi
  *************************************************************************************************/
 static int cmsis_flash_erase(struct flash_bank *bank, unsigned int first, unsigned int last)
 {
-  LOG_DEBUG("---> cmsis_flash_erase");
-  
+	LOG_DEBUG("---> cmsis_flash_erase");
+	
 	struct cmsis_flash *algo = bank->driver_priv;
 	struct target *target = bank->target;
 	int hr;
@@ -790,7 +790,7 @@ release:
 static int cmsis_flash_program_slow(struct flash_bank *bank, const uint8_t *buffer, uint32_t offset,
 	uint32_t count)
 {
-  LOG_DEBUG("---> cmsis_flash_program_slow");
+	LOG_DEBUG("---> cmsis_flash_program_slow");
 	struct cmsis_flash *algo = bank->driver_priv;
 	struct target *target = bank->target;
 	int hr;
@@ -843,7 +843,7 @@ exit_free_wa:
 static int cmsis_flash_program(struct flash_bank *bank, const uint8_t *buffer, uint32_t offset,
 	uint32_t count)
 {
-  LOG_DEBUG("---> cmsis_flash_program");
+	LOG_DEBUG("---> cmsis_flash_program");
 
 	struct cmsis_flash *algo = bank->driver_priv;
 	struct target *target = bank->target;
@@ -929,7 +929,7 @@ exit_free_wa_wrapper:
 exit_release_algo:
 	cmsis_flash_release_algo(bank);
 	return hr;
-#endif  
+#endif	
 }
 
 /** ***********************************************************************************************
@@ -948,63 +948,63 @@ static int cmsis_flash_verify(struct flash_bank *bank, const uint8_t *buffer,
 	struct target *target = bank->target;
 	int hr;
 
-  LOG_DEBUG("offset=0x%08" PRIx32 " count=%" PRId32, offset, count);
+	LOG_DEBUG("offset=0x%08" PRIx32 " count=%" PRId32, offset, count);
 
-  if (algo->of_verify == 0xFFFFFFFF) {
-    LOG_DEBUG("verify() is not implemented");
-    return ERROR_NOT_IMPLEMENTED;
-  }
-  LOG_WARNING("Using CMSIS verify function");
+	if (algo->of_verify == 0xFFFFFFFF) {
+		LOG_DEBUG("verify() is not implemented");
+		return ERROR_NOT_IMPLEMENTED;
+	}
+	LOG_WARNING("Using CMSIS verify function");
 
 	hr = cmsis_flash_prepare_algo(bank, CMSIS_OPERATION_VERIFY);
 	if (hr != ERROR_OK)
 		goto cleanup;
 
-  /* Try to allocate as large RAM buffer as possible starting from 16 page buffers */
+	/* Try to allocate as large RAM buffer as possible starting from 16 page buffers */
 	struct working_area *wa_buffer;
-  uint32_t buffer_size = 16 * algo->flash_dev.sz_page;
-  while (target_alloc_working_area_try(target, buffer_size + 8, &wa_buffer) != ERROR_OK) {
+	uint32_t buffer_size = 16 * algo->flash_dev.sz_page;
+	while (target_alloc_working_area_try(target, buffer_size + 8, &wa_buffer) != ERROR_OK) {
 		buffer_size -= algo->flash_dev.sz_page;
 		if (buffer_size < algo->flash_dev.sz_page) {
 			LOG_ERROR("Failed to allocate working buffer");
-      goto cleanup;
-    }
-  }
+			goto cleanup;
+		}
+	}
 
-  progress_init(count, VERIFYING);
+	progress_init(count, VERIFYING);
 
-  /* some sensible timeout in ms */
-  const uint32_t timeout = 100*(buffer_size/algo->flash_dev.sz_page);
+	/* some sensible timeout in ms */
+	const uint32_t timeout = 100*(buffer_size/algo->flash_dev.sz_page);
 
-  size_t written = 0;
+	size_t written = 0;
 	for (size_t i = 0; i < (count + buffer_size/2) / buffer_size; i++) {
-    size_t write_size = buffer_size;
-    if (count - written < buffer_size) {
-      write_size = count - written;
-    }
- 		hr = target_write_buffer(target, wa_buffer->address, write_size, buffer);
+		size_t write_size = buffer_size;
+		if (count - written < buffer_size) {
+			write_size = count - written;
+		}
+		hr = target_write_buffer(target, wa_buffer->address, write_size, buffer);
 		if (hr != ERROR_OK)
 			goto exit_free_wa;
 
 		const uint32_t addr = bank->base + offset + i * buffer_size;
-    uint32_t result = 0;
-    LOG_DEBUG("verify %" PRId32 " bytes at base address 0x%08" PRIx32, write_size, addr);
+		uint32_t result = 0;
+		LOG_DEBUG("verify %" PRId32 " bytes at base address 0x%08" PRIx32, write_size, addr);
 		hr = cmsis_algo_execute(algo, target, algo->of_verify, timeout, &result, 3, addr, write_size, wa_buffer->address);
 		if (hr != ERROR_OK)
 			goto exit_free_wa;
-    if (result != addr + write_size) {
-      LOG_ERROR("verify fail at 0x%08" PRIx32, result);
-      goto exit_free_wa;
-    }
-    LOG_DEBUG("verified %" PRId32 " bytes at base address 0x%08" PRIx32 " ok", write_size, addr);
-    written += write_size;
+		if (result != addr + write_size) {
+			LOG_ERROR("verify fail at 0x%08" PRIx32, result);
+			goto exit_free_wa;
+		}
+		LOG_DEBUG("verified %" PRId32 " bytes at base address 0x%08" PRIx32 " ok", write_size, addr);
+		written += write_size;
 		buffer += write_size;
 
-    progress_sofar(written);
+		progress_sofar(written);
 
 	}
 
-  progress_done(hr);
+	progress_done(hr);
 
 exit_free_wa:
 	target_free_working_area(target, wa_buffer);
@@ -1098,29 +1098,29 @@ FLASH_BANK_COMMAND_HANDLER(cmsis_flash_bank_command)
 	if (hr != ERROR_OK)
 		goto close_free_algo;
 
-	algo->of_init         = cmsis_symbols[0].offset;
-	algo->of_uninit       = cmsis_symbols[1].offset;
+	algo->of_init					= cmsis_symbols[0].offset;
+	algo->of_uninit				= cmsis_symbols[1].offset;
 	algo->of_erase_sector = cmsis_symbols[2].offset;
 	algo->of_program_page = cmsis_symbols[3].offset;
-  algo->of_blank_check  = cmsis_symbols[4].offset;
-  algo->of_erase_chip   = cmsis_symbols[5].offset;
-  algo->of_verify       = cmsis_symbols[6].offset;
+	algo->of_blank_check	= cmsis_symbols[4].offset;
+	algo->of_erase_chip		= cmsis_symbols[5].offset;
+	algo->of_verify				= cmsis_symbols[6].offset;
 	algo->of_flash_device = cmsis_symbols[7].offset;
-	algo->of_prg_data     = cmsis_symbols[8].offset;
+	algo->of_prg_data			= cmsis_symbols[8].offset;
 
-  LOG_DEBUG("################################");
-  LOG_DEBUG("init         = 0x%08x", algo->of_init);
-  LOG_DEBUG("uninit       = 0x%08x", algo->of_uninit);
-  LOG_DEBUG("erase_sector = 0x%08x", algo->of_erase_sector);
-  LOG_DEBUG("program_page = 0x%08x", algo->of_program_page);
-  LOG_DEBUG("blank_check  = 0x%08x", algo->of_blank_check);
-  LOG_DEBUG("erase_chip   = 0x%08x", algo->of_erase_chip);
-  LOG_DEBUG("verify       = 0x%08x", algo->of_verify);
-  LOG_DEBUG("flash_device = 0x%08x", algo->of_flash_device);
-  LOG_DEBUG("prg_data     = 0x%08x", algo->of_prg_data);
-  LOG_DEBUG("################################");
-  LOG_DEBUG("stack size is %d", algo->stack_size);
-  
+	LOG_DEBUG("################################");
+	LOG_DEBUG("init					= 0x%08x", algo->of_init);
+	LOG_DEBUG("uninit				= 0x%08x", algo->of_uninit);
+	LOG_DEBUG("erase_sector = 0x%08x", algo->of_erase_sector);
+	LOG_DEBUG("program_page = 0x%08x", algo->of_program_page);
+	LOG_DEBUG("blank_check	= 0x%08x", algo->of_blank_check);
+	LOG_DEBUG("erase_chip		= 0x%08x", algo->of_erase_chip);
+	LOG_DEBUG("verify				= 0x%08x", algo->of_verify);
+	LOG_DEBUG("flash_device = 0x%08x", algo->of_flash_device);
+	LOG_DEBUG("prg_data			= 0x%08x", algo->of_prg_data);
+	LOG_DEBUG("################################");
+	LOG_DEBUG("stack size is %d", algo->stack_size);
+	
 	/* Ensure all required symbols are resolved */
 	if (algo->of_init == UINT32_MAX ||
 		algo->of_uninit == UINT32_MAX ||
@@ -1180,7 +1180,7 @@ FLASH_BANK_COMMAND_HANDLER(cmsis_flash_bank_command)
 
 		/* Print basic flash loader information */
 		LOG_INFO("CMSIS-flash: ELF path: %s", algo_url);
-		LOG_INFO("CMSIS-flash: Address range:     0x%08X-0x%08X",
+		LOG_INFO("CMSIS-flash: Address range:			0x%08X-0x%08X",
 			algo->flash_dev.dev_addr, algo->flash_dev.dev_addr + algo->flash_dev.sz_dev -1);
 		LOG_INFO("CMSIS-flash: Program page size: 0x%08X bytes", algo->flash_dev.sz_page);
 		/* Validate the 'FlashDevice' structure and calculate total number of sectors */
@@ -1216,7 +1216,7 @@ free_algo:
 
 COMMAND_HANDLER(cmsis_flash_initialize)
 {
-  LOG_DEBUG("---> cmsis_flash_initiaize");
+	LOG_DEBUG("---> cmsis_flash_initiaize");
 	const char *bank_name = NULL;
 
 	if(CMD_ARGC > 1)
@@ -1265,7 +1265,7 @@ COMMAND_HANDLER(cmsis_flash_initialize)
 
 COMMAND_HANDLER(prefer_sector_erase)
 {
-  LOG_DEBUG("---> prefer_sector_erase");
+	LOG_DEBUG("---> prefer_sector_erase");
 	int arg_index_bank = -1;
 	const char *arg_str_onoff = NULL;
 
@@ -1343,12 +1343,12 @@ static const struct command_registration cmsis_flash_command_handlers[] = {
 };
 
 const struct flash_driver cmsis_flash = {
-  .usage = "$_FLASHNAME cmsis_flash <addr:0> <size:0> 0 0 <target> <algorithm_elf> <stack_size>",
+	.usage = "$_FLASHNAME cmsis_flash <addr:0> <size:0> 0 0 <target> <algorithm_elf> <stack_size>",
 	.name = "cmsis_flash",
 	.commands = cmsis_flash_command_handlers,
 	.flash_bank_command = cmsis_flash_bank_command,
 	.erase = cmsis_flash_erase,
-  .verify = cmsis_flash_verify,
+	.verify = cmsis_flash_verify,
 	.protect = cmsis_flash_protect,
 	.write = cmsis_flash_program,
 	.read = default_flash_read,
